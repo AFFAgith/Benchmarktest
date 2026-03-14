@@ -3,151 +3,187 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>X-BENCH. | GPU MELTDOWN</title>
+    <title>X-BENCH | AnTuTu Clone</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
-        body { background: #000; color: #ff3333; font-family: 'Courier New', Courier, monospace; overflow: hidden; }
-        .crt::before { content: " "; display: block; position: absolute; top: 0; left: 0; bottom: 0; right: 0; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06)); z-index: 2; pointer-events: none; }
-        .danger-box { border: 2px solid #ff0000; background: rgba(20, 0, 0, 0.8); box-shadow: 0 0 30px #ff0000; }
+        body { background: #050505; color: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
+        .glass { background: rgba(20, 20, 20, 0.85); backdrop-filter: blur(15px); border: 1px solid #333; }
         #gpu-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
-        .blink-fast { animation: blinker 0.2s linear infinite; }
-        @keyframes blinker { 50% { opacity: 0; } }
+        .score-text { background: -webkit-linear-gradient(#facc15, #f97316); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
     </style>
 </head>
-<body class="p-6 crt h-screen w-screen flex flex-col justify-center items-center">
+<body class="h-screen w-screen flex flex-col justify-center items-center p-4">
 
     <canvas id="gpu-canvas"></canvas>
 
-    <div class="danger-box p-8 rounded-none w-full max-w-4xl z-10 relative backdrop-blur-md">
-        <div class="absolute top-0 left-0 bg-red-600 text-white text-xs font-black px-2 py-1 uppercase tracking-widest">
-            Level 5 Hazard: GPU Meltdown
-        </div>
+    <div id="dashboard" class="glass p-8 rounded-3xl w-full max-w-md z-10 transition-all duration-500 shadow-2xl">
+        <h1 class="text-4xl font-black text-center mb-1 text-orange-500">X-BENCH <span class="text-white">ULTRA</span></h1>
+        <p class="text-center text-gray-400 mb-8 text-xs uppercase tracking-widest">AnTuTu-Style Stress Test</p>
 
-        <h1 class="text-4xl md:text-5xl font-black text-center mb-2 tracking-tighter mt-4 text-white">GRAPHICS OBLITERATOR</h1>
-        <p class="text-center text-red-400 mb-8 text-sm uppercase">Rendering 2.500 High-Poly Glass Objects with Overdraw</p>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-center mb-8">
-            <div class="border border-red-800 p-6 bg-black/50">
-                <p class="text-xs text-red-500 uppercase tracking-widest">Calculated Polygons</p>
-                <p id="poly-stat" class="text-2xl font-bold text-white mt-2">IDLE</p>
+        <div class="grid grid-cols-2 gap-4 text-center mb-8">
+            <div class="bg-black/50 p-4 rounded-2xl border border-gray-800">
+                <p class="text-[10px] text-gray-500 uppercase tracking-widest">Live FPS</p>
+                <p id="live-fps" class="text-4xl font-bold text-white mt-1">0</p>
             </div>
-            <div class="border border-red-800 p-6 bg-black/50">
-                <p class="text-xs text-red-500 uppercase tracking-widest">Visual Throughput (FPS)</p>
-                <p id="gpu-stat" class="text-5xl font-black text-red-500 mt-2">0</p>
+            <div class="bg-black/50 p-4 rounded-2xl border border-gray-800">
+                <p class="text-[10px] text-gray-500 uppercase tracking-widest">Time Left</p>
+                <p id="time-left" class="text-4xl font-bold text-white mt-1">20s</p>
             </div>
         </div>
 
-        <button onclick="startMeltdown()" id="start-btn" class="w-full bg-red-700 hover:bg-red-600 text-white font-black text-2xl py-6 border-4 border-red-500 transition-all active:scale-95 uppercase tracking-widest shadow-[0_0_20px_#ff0000]">
-            DESTROY MY GPU
+        <button onclick="startTest()" id="start-btn" class="w-full bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 text-white font-black text-xl py-5 rounded-2xl transition-all active:scale-95 shadow-[0_0_20px_rgba(249,115,22,0.4)]">
+            START BENCHMARK
+        </button>
+    </div>
+
+    <div id="result-screen" class="glass p-8 rounded-3xl w-full max-w-md z-20 absolute hidden flex-col items-center text-center transform scale-95 opacity-0 transition-all duration-500 shadow-2xl">
+        <p class="text-gray-400 uppercase tracking-widest text-xs mb-2">Final Performance Score</p>
+        <h2 id="final-score" class="text-6xl font-black mb-2 score-text drop-shadow-lg">0</h2>
+        
+        <div class="bg-black/60 px-6 py-3 rounded-full border border-gray-800 mb-8 mt-4 w-full">
+            <span class="text-gray-400 text-xs uppercase mr-2 tracking-widest">Class:</span>
+            <span id="device-rank" class="font-black text-lg text-white tracking-wide">Calculating...</span>
+        </div>
+
+        <div class="w-full grid grid-cols-2 gap-4 mb-8 text-sm">
+            <div class="bg-black/50 p-4 rounded-2xl border border-gray-800">
+                <span class="text-gray-500 text-[10px] uppercase tracking-widest block">Avg FPS</span>
+                <span id="res-fps" class="font-bold text-2xl text-white">0</span>
+            </div>
+            <div class="bg-black/50 p-4 rounded-2xl border border-gray-800">
+                <span class="text-gray-500 text-[10px] uppercase tracking-widest block">Total Frames</span>
+                <span id="res-frames" class="font-bold text-2xl text-white">0</span>
+            </div>
+        </div>
+
+        <button onclick="location.reload()" class="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-4 rounded-2xl transition uppercase tracking-widest text-sm border border-gray-600">
+            TEST AGAIN
         </button>
     </div>
 
     <script>
-        function burnGPU() {
+        function runBenchmark() {
             return new Promise((resolve) => {
-                document.getElementById('gpu-stat').classList.add('blink-fast');
-                document.getElementById('poly-stat').innerText = "~3.2 Million / Frame";
-
                 const canvas = document.getElementById('gpu-canvas');
-                // Paksa render di resolusi asli layar (SANGAT BERAT UNTUK HP FHD+)
-                const renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: false, antialias: true });
+                const renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: false, antialias: false });
                 renderer.setPixelRatio(window.devicePixelRatio); 
                 renderer.setSize(window.innerWidth, window.innerHeight);
 
                 const scene = new THREE.Scene();
-                // Background abu-abu terang agar transparan terlihat jelas
-                scene.background = new THREE.Color(0x1a1a1a); 
+                scene.background = new THREE.Color(0x050505); 
                 const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
                 camera.position.z = 60;
 
-                // Lampu dinamis warna-warni
-                const light1 = new THREE.PointLight(0xff0055, 2, 200);
+                // Lampu AnTuTu Style (Orange & Biru)
+                const light1 = new THREE.PointLight(0xff7300, 3, 200); 
                 scene.add(light1);
-                const light2 = new THREE.PointLight(0x0055ff, 2, 200);
+                const light2 = new THREE.PointLight(0x00aaff, 3, 200); 
                 scene.add(light2);
-                scene.add(new THREE.AmbientLight(0x404040));
+                scene.add(new THREE.AmbientLight(0x111111));
 
-                // OBJEK SIKSAAN: Icosahedron dengan Physical Material (Logam Kaca)
+                // Objek Siksaan: 3000 Kaca Bertumpuk!
                 const objects = [];
-                // Detail level 4 = bentuk hampir bulat sempurna (ratusan polygon per objek)
                 const geo = new THREE.IcosahedronGeometry(3, 4); 
-                
                 const mat = new THREE.MeshPhysicalMaterial({ 
-                    color: 0xffffff, 
-                    metalness: 0.9, 
-                    roughness: 0.1,
-                    clearcoat: 1.0,        // Kalkulasi pantulan ekstra
-                    clearcoatRoughness: 0.1,
-                    transparent: true,     // OVERDRAW KILLER!
-                    opacity: 0.4,          // Memaksa GPU merender pixel berulang kali
-                    side: THREE.DoubleSide // Merender luar dan dalam objek
+                    color: 0xffffff, metalness: 0.9, roughness: 0.1,
+                    clearcoat: 1.0, transparent: true, opacity: 0.3, side: THREE.DoubleSide 
                 });
 
-                // Spawn 2.500 objek menumpuk di tengah
-                for(let i=0; i<2500; i++) {
+                for(let i=0; i<3000; i++) {
                     let mesh = new THREE.Mesh(geo, mat);
-                    mesh.position.set(
-                        (Math.random()-0.5)*80, 
-                        (Math.random()-0.5)*80, 
-                        (Math.random()-0.5)*40
-                    );
+                    mesh.position.set((Math.random()-0.5)*90, (Math.random()-0.5)*90, (Math.random()-0.5)*50);
                     mesh.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, 0);
                     scene.add(mesh);
                     objects.push(mesh);
                 }
 
-                let frames = 0, lastTime = performance.now(), testStart = performance.now();
-                
+                let frames = 0, totalFrames = 0;
+                let lastTime = performance.now(), testStart = performance.now();
+                const duration = 20000; // DURASI 20 DETIK
+
                 function animate() {
                     let now = performance.now();
-                    if(now - testStart < 10000) { // Siksa selama 10 detik
+                    let elapsed = now - testStart;
+                    
+                    if(elapsed < duration) { 
                         requestAnimationFrame(animate);
                         
-                        // Gerakkan lampu dengan cepat
                         light1.position.x = Math.sin(now * 0.005) * 50;
                         light1.position.y = Math.cos(now * 0.003) * 50;
                         light2.position.x = Math.cos(now * 0.004) * 50;
                         light2.position.y = Math.sin(now * 0.006) * 50;
 
-                        // Rotasi semua 2.500 objek
-                        objects.forEach(c => {
-                            c.rotation.x += 0.02;
-                            c.rotation.y += 0.02;
-                        });
+                        objects.forEach(c => { c.rotation.x += 0.03; c.rotation.y += 0.03; });
 
                         renderer.render(scene, camera);
                         frames++;
+                        totalFrames++;
 
-                        // Update FPS Counter
+                        // Update UI per detik
                         if(now - lastTime >= 1000) {
-                            document.getElementById('gpu-stat').innerText = frames;
+                            document.getElementById('live-fps').innerText = frames;
+                            document.getElementById('time-left').innerText = Math.ceil((duration - elapsed)/1000) + "s";
                             frames = 0;
                             lastTime = now;
                         }
                     } else {
                         renderer.dispose();
-                        document.getElementById('gpu-stat').classList.remove('blink-fast');
-                        resolve();
+                        let avgFPS = totalFrames / (duration / 1000);
+                        resolve({ avgFPS: avgFPS, totalFrames: totalFrames });
                     }
                 }
                 animate();
             });
         }
 
-        async function startMeltdown() {
-            const btn = document.getElementById('start-btn');
-            btn.disabled = true;
-            btn.classList.add('opacity-50', 'cursor-not-allowed');
-            btn.innerText = "TESTING IN PROGRESS...";
+        async function startTest() {
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('start-btn').innerText = "CALCULATING...";
+            document.getElementById('start-btn').classList.add('opacity-50');
             
-            document.getElementById('gpu-stat').innerText = "LOAD";
+            const result = await runBenchmark();
             
-            await burnGPU();
+            // Rumus Rahasia Skor ala AnTuTu 
+            // Kalau HP flagship mulus 60 FPS, skor tembus ~1.300.000
+            let rawScore = (result.avgFPS * 21543) + (result.totalFrames * 15) + Math.floor(Math.random() * 999);
+            let finalScore = Math.floor(rawScore);
+            
+            // Penentuan Pangkat
+            let rank = "";
+            let rankColor = "";
+            if (finalScore < 300000) { rank = "🥔 HP KENTANG"; rankColor = "text-red-500"; }
+            else if (finalScore < 600000) { rank = "🥉 ENTRY LEVEL"; rankColor = "text-orange-400"; }
+            else if (finalScore < 950000) { rank = "🥈 MID-RANGE"; rankColor = "text-blue-400"; }
+            else { rank = "🥇 FLAGSHIP"; rankColor = "text-green-400"; }
 
-            btn.innerText = "RESTART MELTDOWN";
-            btn.disabled = false;
-            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            // Transisi UI dari Dashboard ke Layar Hasil
+            document.getElementById('dashboard').classList.add('hidden');
+            const resScreen = document.getElementById('result-screen');
+            resScreen.classList.remove('hidden');
+            
+            setTimeout(() => {
+                resScreen.classList.remove('scale-95', 'opacity-0');
+                resScreen.classList.add('scale-100', 'opacity-100');
+            }, 50);
+
+            // Animasi Angka Ngetik Cepat ala AnTuTu
+            let currentScore = 0;
+            let increment = finalScore / 40; 
+            let scoreInterval = setInterval(() => {
+                currentScore += increment;
+                if(currentScore >= finalScore) {
+                    currentScore = finalScore;
+                    clearInterval(scoreInterval);
+                    document.getElementById('device-rank').innerText = rank;
+                    document.getElementById('device-rank').className = "font-black text-lg tracking-wide " + rankColor;
+                }
+                // Format angka pakai titik (misal: 1.250.400)
+                document.getElementById('final-score').innerText = Math.floor(currentScore).toLocaleString('id-ID');
+            }, 30);
+
+            document.getElementById('res-fps').innerText = result.avgFPS.toFixed(1);
+            document.getElementById('res-frames').innerText = result.totalFrames.toLocaleString('id-ID');
         }
     </script>
 </body>
